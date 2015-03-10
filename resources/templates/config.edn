@@ -1,0 +1,19 @@
+{:site-title       "(:title data)"
+ :author           "Yannick Scherer"
+ :description      "ramble. ramble. ramble."
+ :site-url         "https://xsc.github.io/"
+ :post-root        "posts"
+ :tag-root         "tags"
+ :page-root        "pages"
+ :blog-prefix      "/blog"
+ :rss-name         "feed.xml"
+ :rss-filters      ["cryogen"]
+ :recent-posts     3
+ :post-date-format "yyyy-MM-dd"
+ :sass-src         nil
+ :sass-dest        nil
+ :resources        ["css" "js" "404.html"]
+ :keep-files       [".git"]
+ :disqus?          true
+ :disqus-shortname "xsc-io"
+ :ignored-files    [#"\.#.*" #".*\.swp$"]}

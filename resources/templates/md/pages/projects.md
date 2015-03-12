@@ -1,4 +1,4 @@
-{:title "Projects", :layout :page, :page-index 0, :navbar? true, :toc true}
+{:title "Projects", :layout :page, :page-index 0, :navbar? true}
 
 ### Leiningen Plugins
 
@@ -18,6 +18,11 @@
   [component](https://github.com/stuartsierra/component) library. It
   additionally handles things like ad-hoc subsystems, graceful rollback after
   initialization failures and some others.
+
+### Utility Libraries
+
+- __[pandect](https://github.com/xsc/pandect)__ is a fast and simple hash,
+  checksum and HMAC library.
 
 ### Ring & Ronda
 

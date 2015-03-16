@@ -1,0 +1,21 @@
+blockquote {
+    color: gray;
+}
+
+code {
+    color: #444;
+    background-color: #eee;
+}
+
+#post-tags {
+    font-size: 9pt;
+    padding: 10px;
+    border: solid 1px #f0f0f0;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+#post-tags a {
+    padding-right: 5px;
+    padding-left: 5px;
+}

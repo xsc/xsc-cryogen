@@ -14,9 +14,9 @@ might look something like the following:
 ```clojure
 (def app
   (-> (compojure/routes
-        (GET  "/people/:id" ...)
-        (GET  "/people" ...)
-        (POST "/people/:id" ...))
+        (GET  "/people/:id" req (person-handler req))
+        (GET  "/people"     req (people-handler req))
+        (POST "/people/:id" req (create-person! req)))
       (wrap-json)
       (wrap-something-else)))
 ```
@@ -30,36 +30,34 @@ at this point in time? Well, whatever, let's get to it:
 
 ```clojure
 (def app
-  (-> (compojure/routes
-        (wrap-json
-          (compojure/routes
-            (GET  "/people/:id" ...)
-            (GET  "/people" ...)))
-        (wrap-form-params
-          (POST "/people/:id" ...)))
-      (wrap-something-else)))
+  (let [person-handler (wrap-json person-handler)
+        people-handler (wrap-json people-handler)
+        create-person! (wrap-form-params create-person!)]
+    (-> (compojure/routes
+          (GET  "/people/:id" req (person-handler req))
+          (GET  "/people"     req (people-handler req))
+          (POST "/people/:id" req (create-person! req)))
+      (wrap-something-else))))
 ```
 
-Ah, but we should add an ETag to the `GET /people/:id` endpoint, so it can be
-cached (not the `GET /people` one, though, since it changes way too frequently).
-But this one has to be applied after the response JSON was created, so there is
-really no way around the following disaster:
+Ah, I just remembered, we should add an ETag to the `GET /people/:id` endpoint,
+so it can be cached (not the `GET /people` one, though, since it changes way too
+frequently):
 
 ```clojure
 (def app
-  (-> (compojure/routes
-        (-> (GET "/people/:id" ...)
-            (wrap-json)
-            (wrap-etag))
-        (wrap-json
-          (GET "/people" ...))
-        (wrap-form-params
-          (POST "/people/:id" ...)))
-      (wrap-something-else)))
+  (let [person-handler (-> person-handler wrap-json wrap-etag)
+        people-handler (wrap-json people-handler)
+        create-person! (wrap-form-params create-person!)]
+    (-> (compojure/routes
+          (GET  "/people/:id" req (person-handler req))
+          (GET  "/people"     req (people-handler req))
+          (POST "/people/:id" req (create-person! req)))
+      (wrap-something-else))))
 ```
 
-I exaggeratingly call it a disaster, yet it's still quite manageable in small
-applications (and proper namespacing goes a long way). However:
+This is surely quite manageable in small applications (and proper namespacing
+and encapsulation goes a long way). However:
 
 - the `wrap-json` middleware is duplicated across multiple handlers,
 - you thus have to exchange it in multiple places if you want to switch

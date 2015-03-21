@@ -113,8 +113,13 @@ code {
     color: #428bca;
 }
 
-pre, code, .hljs {
-    background-color: #f7f9fd;
+pre {
+    background-color: inherit;
+    padding: 0;
+}
+
+code.hljs {
+    padding:9.5px;
 }
 
 @media (min-width: 768px) {

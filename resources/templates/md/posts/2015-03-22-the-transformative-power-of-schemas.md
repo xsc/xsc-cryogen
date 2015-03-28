@@ -111,5 +111,3 @@ are treated differently from others. And if upper limits and capping behaviour
 are not part of the data description - and thus schemas - what is?
 
 ### Solution #3: How I learned to stop worrying and love the Schema.
-
-

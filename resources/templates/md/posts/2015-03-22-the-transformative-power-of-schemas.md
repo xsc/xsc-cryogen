@@ -32,8 +32,8 @@ schema (or a map that does the same thing):
 ;; => {:a "1", :b 2}
 ```
 
-Custom wakers are wonderful for generic and mostly schema-independent
-transformations. Localized processing, however, is a different beast.
+Custom walkers are wonderful for generic and schema-independent transformations.
+And I want to know how useful they are for localized ones.
 
 ### The Problem
 
@@ -79,35 +79,146 @@ and you'll have to adjust all of them if something changes.
 ### Solution #2: Walk the Walk
 
 To illustrate how a custom walker could solve this problem we'll tackle it based
-on key names. Whenever we encounter `:x`, `:y` or `:z-limit` the value will be
-capped:
+on a marker schema defined as follows:
 
 ```clojure
-(defn cap-walker
-  [schema]
-  (let [walk (s/walker schema)]
-    (if (and (instance? schema.core.MapEntry schema)
-             (#{:x :y :z-index} (:kspec schema)))
-      (fn [x]
-        (let [[k v] (walk x)]
-          [k (min v 1000)]))
-      walk)))
+(defrecord Transform [schema f]
+  s/Schema
+  (walker [_]
+    (s/walker schema))
+  (explain [_]
+    (s/explain schema)))
 ```
 
-This can be run on a value using `start-walker`, producing an `ErrorContainer`
-if validation fails:
+Whenever we encounter such a value we'll validate it and then apply the stored
+function:
 
 ```clojure
-((s/start-walker cap-walker point-schema)
+(defn transform-walker
+  [schema]
+  (if (instance? Transform schema)
+    (let [walk (s/walker schema)
+          f (:f schema)]
+      (fn [x]
+        (let [result (walk x)]
+          (if-not (schema.utils/error? result)
+            (f result)
+            result))))
+    (s/walker schema)))
+```
+
+This allows us to create a schema representing a generic upper limit:
+
+```clojure
+(defn capped
+  [max-value]
+  (->Transform s/Int #(min % max-value)))
+```
+
+And our point schema ends up being:
+
+```clojure
+(def pos-schema     (capped 1000))
+(def z-index-schema (capped 1000))
+
+(def point-schema
+  {:pos     {:x pos-schema, :y pos-schema}
+   :z-index z-index-schema
+   :value   s/Int})
+```
+
+The great advantage of this approach is that we can utilize different walkers:
+If we only want to validate input data, a call to `s/validate` will do so; if we
+want to coerce we can use the built-in coercion walker; and if we desire to
+apply our custom transformations we will prevail:
+
+```clojure
+((s/start-walker transform-walker point-schema)
  {:pos {:x 1001, :y 2}
   :z-index 2000
   :value 0})
 ;; => {:value 0, :z-index 1000, :pos {:y 2, :x 1000}}
 ```
 
-We are now validating and transforming in one go but expressiveness is still
-lacking - you can't look at the schema and immediately see that some elements
-are treated differently from others. And if upper limits and capping behaviour
-are not part of the data description - and thus schemas - what is?
+But walkers are not easily composable since they are created based on the schema
+of the original input data. If one of the walkers changes the shape of the data
+(and this is what we're talking about here) subsequent ones might fail when
+attempting validation.
 
 ### Solution #3: How I learned to stop worrying and love the Schema.
+
+I'd argue that within a fixed processing pipeline the flexibility of being able
+to choose between different walkers is not a necessary requirement - but being
+able to easily compose different processing steps is. By definition.
+
+As we saw above, it is possible to attach processing logic to a schema - this
+time, however, the schema will do the processing itself:
+
+```clojure
+(defrecord Fn [f input output explain-name explain-args]
+  s/Schema
+  (walker [_]
+    (let [iwalk (s/subschema-walker input)
+          owalk (s/subschema-walker output)]
+      (fn [value]
+        (let [in (iwalk value)]
+          (if-not (schema.utils/error? in)
+            (owalk (f in))
+            in)))))
+  (explain [_]
+    (list* explain-name
+           [(s/explain input) '=> (s/explain output)]
+           explain-args)))
+```
+
+This opens the doors for concise descriptions of processing units. (I'd even
+argue that this is what `schema.core/fn` et al should produce - maybe
+implementing the necessary interfaces to behave like a normal function - since
+it allows for a declarative way of generating localized transformations.) Note
+that the actual processing needs the following convenience function:
+
+```clojure
+(defn run
+  [schema value]
+  ((s/start-walker s/walker schema) value))
+```
+
+But back to our omnipresent and all-important capping example:
+
+```clojure
+(defn capped
+  [max-value]
+  (->Fn #(min % max-value) s/Int s/Int 'limit [max-value]))
+```
+
+Bow, limit-ignoring values!
+
+```clojure
+(run (capped 1000) 1500)
+;; => 1000
+
+(run
+  {:pos {:x (capped 200), :y (capped 100)}}
+  {:pos {:x 500, :y 500}})
+;; => {:pos {:x 200, :y 100}}
+```
+
+And schemas are composable, as we know:
+
+```clojure
+(run (s/both (capped 500) (capped 200)) 1000)
+;; => 200
+```
+
+(Although it would probably be better to create an `FnComp` schema instead of
+relying on `s/both` sequentially running the schemas.)
+
+Processing within a schema and processing in a custom walker are orthogonal
+concepts. This means that there is e.g. no reason why coercion could not be used
+with the above `Fn` schema - just coerce the input values, call the function and
+finally coerce its output.
+
+### Discussion
+
+Okay, here's the thing: While certainly possible, I'm not sure this is what
+schemas were made for.
